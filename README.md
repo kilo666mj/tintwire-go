@@ -5,7 +5,7 @@ keeps producer code independent from the Tintwire server implementation and can
 use an existing Mattermost incoming webhook strictly as delivery failover.
 
 ```sh
-go get git.internal/mjohnson/tintwire-go
+go get github.com/kilo666mj/tintwire-go
 ```
 
 ```go
