@@ -25,6 +25,9 @@ const (
 type Result struct {
 	Destination    Destination
 	NotificationID string
+	// PrimaryError is set when Mattermost accepted a notification after the
+	// Tintwire destination exhausted its retryable delivery attempts.
+	PrimaryError error
 }
 
 type Client struct {
@@ -32,6 +35,8 @@ type Client struct {
 	token             string
 	mattermostWebhook string
 	httpClient        *http.Client
+	primaryRetries    int
+	primaryRetryDelay time.Duration
 }
 
 type clientOptions struct {
@@ -39,6 +44,8 @@ type clientOptions struct {
 	httpClient        *http.Client
 	timeout           time.Duration
 	timeoutSet        bool
+	primaryRetries    int
+	primaryRetryDelay time.Duration
 }
 
 type Option func(*clientOptions) error
@@ -78,6 +85,23 @@ func WithTimeout(timeout time.Duration) Option {
 			return errors.New("tintwire: timeout must be positive")
 		}
 		options.timeout, options.timeoutSet = timeout, true
+		return nil
+	}
+}
+
+// WithPrimaryRetries retries a retryable Tintwire failure before attempting a
+// configured Mattermost fallback. retries counts attempts after the initial
+// request. The delay is context-aware and policy failures are never retried.
+func WithPrimaryRetries(retries int, delay time.Duration) Option {
+	return func(options *clientOptions) error {
+		if retries < 0 {
+			return errors.New("tintwire: primary retries cannot be negative")
+		}
+		if retries > 0 && delay <= 0 {
+			return errors.New("tintwire: primary retry delay must be positive")
+		}
+		options.primaryRetries = retries
+		options.primaryRetryDelay = delay
 		return nil
 	}
 }
@@ -138,6 +162,8 @@ func newClient(endpoint, token string, options ...Option) (*Client, error) {
 		endpoint: endpoint, token: token,
 		mattermostWebhook: configuration.mattermostWebhook,
 		httpClient:        client,
+		primaryRetries:    configuration.primaryRetries,
+		primaryRetryDelay: configuration.primaryRetryDelay,
 	}, nil
 }
 
@@ -162,6 +188,20 @@ func (client *Client) Publish(ctx context.Context, card Card) (Result, error) {
 	if primaryErr == nil {
 		return Result{Destination: DestinationTintwire, NotificationID: response.ID}, nil
 	}
+	for retries := 0; retries < client.primaryRetries && shouldFailover(ctx, primaryErr); retries++ {
+		timer := time.NewTimer(client.primaryRetryDelay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return Result{}, ctx.Err()
+		case <-timer.C:
+		}
+		response.ID = ""
+		primaryErr = client.postJSON(ctx, client.endpoint, "Bearer "+client.token, body, &response)
+		if primaryErr == nil {
+			return Result{Destination: DestinationTintwire, NotificationID: response.ID}, nil
+		}
+	}
 	if client.mattermostWebhook == "" || !shouldFailover(ctx, primaryErr) {
 		return Result{}, primaryErr
 	}
@@ -173,7 +213,7 @@ func (client *Client) Publish(ctx context.Context, card Card) (Result, error) {
 	if fallbackErr != nil {
 		return Result{}, &DeliveryError{Tintwire: primaryErr, Mattermost: fallbackErr}
 	}
-	return Result{Destination: DestinationMattermost}, nil
+	return Result{Destination: DestinationMattermost, PrimaryError: primaryErr}, nil
 }
 
 // Send is a convenience wrapper for callers that do not need delivery metadata.

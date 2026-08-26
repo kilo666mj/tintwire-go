@@ -13,6 +13,7 @@ client, err := tintwire.New(
     "https://tintwire.example",
     os.Getenv("TINTWIRE_TOKEN"),
     tintwire.WithMattermostFailover(os.Getenv("MATTERMOST_WEBHOOK_URL")),
+    tintwire.WithPrimaryRetries(2, 250*time.Millisecond),
 )
 if err != nil {
     log.Fatal(err)
@@ -33,6 +34,9 @@ if err != nil {
     log.Printf("notification failed: %v", err)
 } else {
     log.Printf("notification delivered by %s", result.Destination)
+	if result.PrimaryError != nil {
+		log.Printf("Tintwire failed before fallback: %v", result.PrimaryError)
+	}
 }
 ```
 
@@ -50,7 +54,8 @@ Mattermost is never dual-published. Failover is attempted only for transport
 failures, HTTP 408/429 responses, and server-side 5xx responses. Authentication,
 authorization, channel-policy, and payload rejections do not fail over. Invalid
 cards are rejected locally because a second representation would hide a
-producer bug.
+producer bug. `WithPrimaryRetries` adds a bounded, context-aware delay before
+fallback; it is opt-in so existing clients retain their delivery timing.
 
 The package uses only the Go standard library. The default HTTP timeout is 10
 seconds; use `WithTimeout` or `WithHTTPClient` when a service needs different

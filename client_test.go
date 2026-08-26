@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
@@ -100,7 +101,39 @@ func TestMattermostIsFailoverNotDualDelivery(t *testing.T) {
 			if requests != test.wantRequests || result.Destination != test.wantDestination {
 				t.Fatalf("requests = %d, result = %#v", requests, result)
 			}
+			if test.wantDestination == DestinationMattermost && result.PrimaryError == nil {
+				t.Fatalf("fallback result did not retain primary error: %#v", result)
+			}
 		})
+	}
+}
+
+func TestPrimaryRetriesBeforeFailover(t *testing.T) {
+	requests := 0
+	httpClient := &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		requests++
+		if requests < 3 {
+			return testResponse(http.StatusServiceUnavailable, "try again"), nil
+		}
+		return testResponse(http.StatusCreated, `{"id":"ntf_retry"}`), nil
+	})}
+	client, err := New("https://tintwire.example", "token",
+		WithMattermostFailover("https://matter.example/hooks/fallback"),
+		WithPrimaryRetries(2, time.Nanosecond), WithHTTPClient(httpClient))
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := client.Publish(context.Background(), Card{Title: "Retry me"})
+	if err != nil || requests != 3 || result.Destination != DestinationTintwire || result.NotificationID != "ntf_retry" {
+		t.Fatalf("requests = %d, result = %#v, error = %v", requests, result, err)
+	}
+}
+
+func TestPrimaryRetryOptionValidation(t *testing.T) {
+	for _, option := range []Option{WithPrimaryRetries(-1, time.Second), WithPrimaryRetries(1, 0)} {
+		if _, err := New("https://tintwire.example", "token", option); err == nil {
+			t.Fatal("invalid primary retry option was accepted")
+		}
 	}
 }
 
