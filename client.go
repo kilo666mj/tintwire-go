@@ -260,7 +260,7 @@ func (client *Client) postJSON(ctx context.Context, endpoint, authorization stri
 	if err != nil {
 		return &transportError{cause: err}
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	responseBody, readErr := io.ReadAll(io.LimitReader(response.Body, 4097))
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		message := strings.TrimSpace(string(responseBody))
