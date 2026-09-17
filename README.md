@@ -5,8 +5,13 @@ keeps producer code independent from the Tintwire server implementation and can
 use an existing Mattermost incoming webhook strictly as delivery failover.
 
 ```sh
-go get github.com/kilo666mj/tintwire-go
+go get github.com/kilo666mj/tintwire-go@v0.1.0
 ```
+
+Pin `@v0.1.0` for reproducible builds. `tintwire-go` requires Go 1.24 or newer,
+uses only the standard library, and is tested at both the minimum and current Go
+releases. See the complete API on
+[pkg.go.dev](https://pkg.go.dev/github.com/kilo666mj/tintwire-go).
 
 ```go
 client, err := tintwire.New(
@@ -60,3 +65,25 @@ fallback; it is opt-in so existing clients retain their delivery timing.
 The package uses only the Go standard library. The default HTTP timeout is 10
 seconds; use `WithTimeout` or `WithHTTPClient` when a service needs different
 transport behavior.
+
+## Ownership boundaries
+
+The library owns version-1 card validation and encoding, bounded HTTP response
+handling, transport-safe errors, native delivery, and the optional failover
+decision. The producer owns token storage, channel and recipient policy,
+payload sensitivity, deadlines, retry/failover configuration, logging, metrics,
+and the decision to retry after an ambiguous transport failure. The Tintwire
+server remains the authority for authentication and channel authorization.
+
+## Adoption checklist
+
+1. Pin the module and construct one long-lived client with a secret publishing
+   token supplied by the deployment secret store.
+2. Set an application deadline and decide whether the default transport timeout
+   fits it; inject an existing instrumented `http.Client` when appropriate.
+3. Start with native delivery only. Configure Mattermost failover only for an
+   independently operated recovery path.
+4. Send stable `Source`, `Channel`, and field labels; keep secrets and unbounded
+   diagnostic blobs out of cards.
+5. Record `Result.Destination` and `PrimaryError` without logging tokens or
+   capability URLs. Test 4xx, 429, 5xx, timeout, cancellation, and fallback.
