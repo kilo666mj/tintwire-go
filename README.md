@@ -5,10 +5,10 @@ keeps producer code independent from the Tintwire server implementation and can
 use an existing Mattermost incoming webhook strictly as delivery failover.
 
 ```sh
-go get github.com/kilo666mj/tintwire-go@v0.1.0
+go get github.com/kilo666mj/tintwire-go@v0.2.0
 ```
 
-Pin `@v0.1.0` for reproducible builds. `tintwire-go` requires Go 1.24 or newer,
+Pin `@v0.2.0` for reproducible builds. `tintwire-go` requires Go 1.24 or newer,
 uses only the standard library, and is tested at both the minimum and current Go
 releases. See the complete API on
 [pkg.go.dev](https://pkg.go.dev/github.com/kilo666mj/tintwire-go).
