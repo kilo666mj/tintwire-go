@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strings"
 
-	tintwire "github.com/kilo666mj/tintwire-go"
+	tintwire "go.michaelspost.com/tintwire-go"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)

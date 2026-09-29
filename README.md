@@ -5,13 +5,13 @@ keeps producer code independent from the Tintwire server implementation and can
 use an existing Mattermost incoming webhook strictly as delivery failover.
 
 ```sh
-go get github.com/kilo666mj/tintwire-go@v0.2.0
+go get go.michaelspost.com/tintwire-go@v0.3.0
 ```
 
 Pin `@v0.2.0` for reproducible builds. `tintwire-go` requires Go 1.24 or newer,
 uses only the standard library, and is tested at both the minimum and current Go
 releases. See the complete API on
-[pkg.go.dev](https://pkg.go.dev/github.com/kilo666mj/tintwire-go).
+[pkg.go.dev](https://pkg.go.dev/go.michaelspost.com/tintwire-go).
 
 ```go
 client, err := tintwire.New(
@@ -87,3 +87,15 @@ server remains the authority for authentication and channel authorization.
    diagnostic blobs out of cards.
 5. Record `Result.Destination` and `PrimaryError` without logging tokens or
    capability URLs. Test 4xx, 429, 5xx, timeout, cancellation, and fallback.
+
+## Module path migration
+
+Starting with `v0.3.0`, the canonical module path is
+`go.michaelspost.com/tintwire-go`. Update imports (including package subpaths)
+and the requirement in `go.mod` together, then run `go mod tidy` and your tests.
+Do not mix the old and new package paths in one build: Go treats them as
+different package identities. No `replace` directive is needed.
+
+Earlier tags retain `github.com/kilo666mj/tintwire-go` and remain available for
+existing consumers pinned to those releases. GitHub remains the source repository;
+the vanity path allows future hosting changes without changing imports again.

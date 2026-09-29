@@ -1,3 +1,3 @@
-module github.com/kilo666mj/tintwire-go
+module go.michaelspost.com/tintwire-go
 
 go 1.24
