@@ -25,6 +25,19 @@ func TestCardValidation(t *testing.T) {
 	if err := invalid.Validate(); err == nil {
 		t.Fatal("unsafe action URL was accepted")
 	}
+	lifecycle := valid
+	lifecycle.State, lifecycle.LifecycleKey = StateFiring, "check:web"
+	if err := lifecycle.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	for _, bad := range []Card{
+		{Title: "x", State: "acknowledged"},
+		{Title: "x", State: StateFiring, LifecycleKey: "   "},
+	} {
+		if err := bad.Validate(); err == nil {
+			t.Fatalf("invalid lifecycle %q/%q was accepted", bad.State, bad.LifecycleKey)
+		}
+	}
 }
 
 func TestFallbackPreservesUsefulCardContent(t *testing.T) {
