@@ -31,6 +31,15 @@ const (
 	ToneSuccess  Tone = "success"
 )
 
+// State is a card's incident lifecycle state.
+type State string
+
+const (
+	StateReceived State = "received"
+	StateFiring   State = "firing"
+	StateResolved State = "resolved"
+)
+
 // Emphasis controls the visual weight of a row.
 type Emphasis string
 
@@ -60,6 +69,13 @@ type Card struct {
 	Links    []Link   `json:"links,omitempty"`
 	Rows     []Row    `json:"rows,omitempty"`
 	Actions  []Action `json:"actions,omitempty"`
+
+	// State and LifecycleKey report one incident as a single notification.
+	// Cards published with the same LifecycleKey update the earlier card, so a
+	// firing card followed by a resolved one reads as one incident. Both are
+	// optional; they require a Tintwire server that accepts them.
+	State        State  `json:"state,omitempty"`
+	LifecycleKey string `json:"lifecycle_key,omitempty"`
 }
 
 type Metric struct {
@@ -116,6 +132,12 @@ func (card Card) Validate() error {
 	}
 	if card.Severity != "" && !oneOf(string(card.Severity), "info", "warning", "critical", "success") {
 		return errors.New("tintwire: unsupported severity")
+	}
+	if !oneOf(string(card.State), "", "received", "firing", "resolved") {
+		return errors.New("tintwire: unsupported state")
+	}
+	if len(card.LifecycleKey) > 200 || (card.LifecycleKey != "" && strings.TrimSpace(card.LifecycleKey) == "") {
+		return errors.New("tintwire: lifecycle key must be 1 to 200 bytes")
 	}
 	if len(card.Metrics) > 12 || len(card.Fields) > 24 || len(card.Badges) > 16 || len(card.Images) > 4 || len(card.Links) > 12 || len(card.Rows) > 2000 || len(card.Actions) > 8 {
 		return errors.New("tintwire: card component limit exceeded")
