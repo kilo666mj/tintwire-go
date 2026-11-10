@@ -170,6 +170,18 @@ func newClient(endpoint, token string, options ...Option) (*Client, error) {
 // Publish validates and sends a native card. When configured, Mattermost is
 // attempted only after Tintwire delivery fails.
 func (client *Client) Publish(ctx context.Context, card Card) (Result, error) {
+	return client.publish(ctx, card, true)
+}
+
+// PublishPrimary sends only to Tintwire, even when Mattermost failover is
+// configured. Durable producers can use it to finish a lifecycle update after
+// an earlier Publish succeeded through Mattermost. It retains validation and
+// the configured primary retries; the caller owns durable retry scheduling.
+func (client *Client) PublishPrimary(ctx context.Context, card Card) (Result, error) {
+	return client.publish(ctx, card, false)
+}
+
+func (client *Client) publish(ctx context.Context, card Card, allowFallback bool) (Result, error) {
 	if client == nil {
 		return Result{}, errors.New("tintwire: client is nil")
 	}
@@ -202,7 +214,7 @@ func (client *Client) Publish(ctx context.Context, card Card) (Result, error) {
 			return Result{Destination: DestinationTintwire, NotificationID: response.ID}, nil
 		}
 	}
-	if client.mattermostWebhook == "" || !shouldFailover(ctx, primaryErr) {
+	if !allowFallback || client.mattermostWebhook == "" || !shouldFailover(ctx, primaryErr) {
 		return Result{}, primaryErr
 	}
 	fallbackBody, err := json.Marshal(mattermostPayloadForCard(card))

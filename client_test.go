@@ -60,6 +60,48 @@ func TestPublishUsesNativeCardAndReturnsID(t *testing.T) {
 	}
 }
 
+func TestPublishPrimaryDoesNotRepeatFallback(t *testing.T) {
+	primaryStatus := http.StatusServiceUnavailable
+	primaryCalls, fallbackCalls := 0, 0
+	httpClient := &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		if request.URL.Host == "mattermost.example" {
+			fallbackCalls++
+			return testResponse(http.StatusOK, ""), nil
+		}
+		primaryCalls++
+		return testResponse(primaryStatus, `{"id":"ntf_recovered"}`), nil
+	})}
+	client, err := New("https://tintwire.example", "token", WithHTTPClient(httpClient),
+		WithMattermostFailover("https://mattermost.example/hooks/fallback"), WithPrimaryRetries(1, time.Nanosecond))
+	if err != nil {
+		t.Fatal(err)
+	}
+	card := Card{Title: "Recovered", State: StateResolved, LifecycleKey: "test/service"}
+	if result, err := client.Publish(t.Context(), card); err != nil || result.Destination != DestinationMattermost {
+		t.Fatalf("initial publish = %+v, %v", result, err)
+	}
+	if _, err := client.PublishPrimary(t.Context(), card); err == nil {
+		t.Fatal("primary-only retry hid primary failure")
+	}
+	if primaryCalls != 4 || fallbackCalls != 1 {
+		t.Fatalf("attempts: primary=%d fallback=%d", primaryCalls, fallbackCalls)
+	}
+	primaryStatus = http.StatusCreated
+	if result, err := client.PublishPrimary(t.Context(), card); err != nil || result.NotificationID != "ntf_recovered" || result.Destination != DestinationTintwire {
+		t.Fatalf("primary recovery = %+v, %v", result, err)
+	}
+	if fallbackCalls != 1 {
+		t.Fatalf("repeated fallback %d times", fallbackCalls)
+	}
+	if _, err := client.PublishPrimary(t.Context(), Card{}); err == nil || primaryCalls != 5 {
+		t.Fatalf("invalid card was not rejected locally: %v, calls=%d", err, primaryCalls)
+	}
+	var nilClient *Client
+	if _, err := nilClient.PublishPrimary(t.Context(), card); err == nil {
+		t.Fatal("nil client accepted")
+	}
+}
+
 func TestMattermostIsFailoverNotDualDelivery(t *testing.T) {
 	for _, test := range []struct {
 		name            string

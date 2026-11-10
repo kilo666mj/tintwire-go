@@ -5,10 +5,10 @@ keeps producer code independent from the Tintwire server implementation and can
 use an existing Mattermost incoming webhook strictly as delivery failover.
 
 ```sh
-go get go.michaelspost.com/tintwire-go@v0.4.0
+go get go.michaelspost.com/tintwire-go@v0.5.0
 ```
 
-Pin `@v0.4.0` for reproducible builds. `tintwire-go` requires Go 1.24 or newer,
+Pin `@v0.5.0` for reproducible builds. `tintwire-go` requires Go 1.24 or newer,
 uses only the standard library, and is tested at both the minimum and current Go
 releases. See the complete API on
 [pkg.go.dev](https://pkg.go.dev/go.michaelspost.com/tintwire-go).
@@ -61,6 +61,15 @@ authorization, channel-policy, and payload rejections do not fail over. Invalid
 cards are rejected locally because a second representation would hide a
 producer bug. `WithPrimaryRetries` adds a bounded, context-aware delay before
 fallback; it is opt-in so existing clients retain their delivery timing.
+
+For lifecycle cards, successful fallback does not update an existing Tintwire
+card. A durable producer should retain the update when `Result.Destination` is
+`DestinationMattermost`, record that fallback was accepted, and retry it with
+`client.PublishPrimary(ctx, card)`. This method uses the same validation and
+primary retry policy but never sends to Mattermost. Persist pending updates and
+fallback acceptance across restarts, and preserve lifecycle update order so a
+delayed firing update cannot overwrite a later recovery. The library does not
+own a durable queue or automatically reconcile past fallback deliveries.
 
 The package uses only the Go standard library. The default HTTP timeout is 10
 seconds; use `WithTimeout` or `WithHTTPClient` when a service needs different
